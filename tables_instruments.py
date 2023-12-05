@@ -65,23 +65,36 @@ def set_names_in_node_table(node_table: pd.DataFrame, relation: dict):
         node_table.loc[i, 'string_id'] = relation[name]
 
 
+# Подгружаем в node_table столбец "is_OG" и ноды ортогрупп
+def load_is_og_col(node_table: pd.DataFrame, og_list: list, network: str):
+    is_og_dict = {'name': list(node_table['name']) + og_list, 'is_og': [False]*len(node_table.index) + [True]*len(og_list)}
+    og_df = pd.DataFrame(data=is_og_dict, index=list(node_table.index) + og_list)
+    p4c.load_table_data(og_df, table='node', data_key_column='name', table_key_column='name', network=network)
+
+
 # Добавляем в таблицу узлов ортогруппы
+# Возвращает список ортогрупп для текущего вида
 def assign_og_to_gene(node_table: pd.DataFrame, og_table: pd.DataFrame):
     node_table['OG'] = ['']*len(node_table.index)
+    node_table['is_OG'] = [False]*len(node_table.index)
     specie = int(node_table.loc[node_table.index[0], 'string_id'].split('.')[0])
+    node_table['specie'] = [specie]*len(node_table.index)
+    node_table['name'] = str(specie) + ". " + node_table['shared name']
     node_table.set_index('string_id', inplace=True)
+    og_list = []
     for i in og_table.index:
         for gene in og_table.loc[i, specie]:
             if gene not in node_table.index:
                 continue
             node_table.loc[gene, 'OG'] = i
+            og_list.append(i)
+    node_table['OG'].replace('', np.nan, inplace=True)
+    node_table.reset_index(inplace=True)
+    node_table.set_index('SUID', inplace=True)
+    return og_list
 
 
 # Загружаем видоизмененную таблицу узлов обратно в цитоскейп
 def load_altered_node_table_to_cyto(node_table: pd.DataFrame, network_name: str):
     p4c.load_table_data(node_table, table='node', network=network_name,
-                        data_key_column='name', table_key_column='name')
-
-
-if __name__ == "__main__":
-    print(0)
+                        data_key_column='shared name', table_key_column='shared name')
